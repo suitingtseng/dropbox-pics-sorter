@@ -1,0 +1,33 @@
+hash: cfbac5b0dc74a909f6025f6ba629db380c9b8773fd75c01e408ad455f6890da1
+updated: 2017-06-15T23:32:59.967825166+01:00
+imports:
+- name: github.com/dropbox/dropbox-sdk-go-unofficial
+  version: 710d12eade8c4cd17ed096a058f182f5d6dea0a8
+  subpackages:
+  - dropbox
+  - dropbox/async
+  - dropbox/files
+  - dropbox/properties
+- name: github.com/golang/protobuf
+  version: e325f446bebc2998605911c0a2650d9920361d4a
+  subpackages:
+  - proto
+- name: golang.org/x/net
+  version: ddf80d0970594e2e4cccf5a98861cad3d9eaa4cd
+  subpackages:
+  - context
+- name: golang.org/x/oauth2
+  version: f047394b6d14284165300fd82dad67edb3a4d7f6
+  subpackages:
+  - internal
+- name: google.golang.org/appengine
+  version: a2f4131514e563cedfdb6e7d267df9ad48591e93
+  subpackages:
+  - internal
+  - internal/base
+  - internal/datastore
+  - internal/log
+  - internal/remote_api
+  - internal/urlfetch
+  - urlfetch
+testImports: []
