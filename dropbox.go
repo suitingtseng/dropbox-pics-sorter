@@ -19,6 +19,11 @@ type MvArg struct {
 	dest string
 }
 
+type LsResult struct {
+	path         string
+	lastModified time.Time
+}
+
 func NewDropbox(token string, verbose bool) *Dbx {
 	config := dropbox.Config{Token: token, Verbose: verbose}
 	dbx_files := files.New(config)
@@ -36,7 +41,7 @@ func (dbx *Dbx) Mkdir(path string) error {
 	return err
 }
 
-func (dbx *Dbx) Ls(path string) (*files.ListFolderResult, error) {
+func (dbx *Dbx) Ls(path string) ([]LsResult, error) {
 	arg := &files.ListFolderArg{
 		Path:                            path,
 		Recursive:                       false,
@@ -44,7 +49,24 @@ func (dbx *Dbx) Ls(path string) (*files.ListFolderResult, error) {
 		IncludeDeleted:                  false,
 		IncludeHasExplicitSharedMembers: false,
 	}
-	return dbx.client.ListFolder(arg)
+
+	res, err := dbx.client.ListFolder(arg)
+	if err != nil {
+		return nil, err
+	}
+
+	ls_results := make([]LsResult, 0)
+	for _, entry := range (*res).Entries {
+		meta, ok := entry.(*files.FileMetadata)
+		if !ok || !isImage(meta.PathLower) {
+			continue
+		}
+		ls_results = append(ls_results, LsResult{
+			path:         meta.PathLower,
+			lastModified: meta.ClientModified,
+		})
+	}
+	return ls_results, nil
 }
 
 // only try to launch a batch move file;

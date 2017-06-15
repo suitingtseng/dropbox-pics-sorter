@@ -6,8 +6,6 @@ import (
 	"os"
 	"path"
 	"time"
-
-	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
 )
 
 const (
@@ -43,20 +41,19 @@ func main() {
 	go Mkdir(dbx, chan_time, chan_finish)
 
 	mv_args := make([]MvArg, 0)
-	for _, entry := range (*res).Entries {
-		meta, ok := entry.(*files.FileMetadata)
-		if !ok || !isImage(meta.PathLower) {
+	for _, ls_result := range res {
+		if isImage(ls_result.path) {
 			continue
 		}
-		dir, file := path.Split(meta.PathLower)
-		date_string := meta.ClientModified.Format(FORMAT)
+		dir, file := path.Split(ls_result.path)
+		date_string := ls_result.lastModified.Format(FORMAT)
 		to_path := path.Join(dir, date_string, file)
 		mv_args = append(mv_args, MvArg{
-			src:  meta.PathLower,
+			src:  ls_result.path,
 			dest: to_path,
 		})
 		// try to create folder
-		chan_time <- meta.ClientModified
+		chan_time <- ls_result.lastModified
 	}
 
 	// make sure we terminate the goroutine for Mkdir
