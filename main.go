@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"path"
 	"time"
 
@@ -19,9 +20,13 @@ var (
 )
 
 func init() {
-	flag.StringVar(&token, "token", "", "Dropbox API token")
-	flag.BoolVar(&verbose, "verbose", false, "Verbose")
+	flag.StringVar(&token, "token", "", "Dropbox API token, required")
+	flag.BoolVar(&verbose, "verbose", false, "Verbose, optional, default: false")
 	flag.Parse()
+	if len(token) == 0 {
+		flag.Usage()
+		os.Exit(1)
+	}
 }
 
 func main() {
@@ -29,7 +34,7 @@ func main() {
 
 	res, err := dbx.Ls(CAMERA_UPLOADS)
 	if err != nil {
-		panic(err)
+		os.Exit(2)
 	}
 
 	chan_time := make(chan time.Time)
