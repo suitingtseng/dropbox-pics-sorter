@@ -6,11 +6,12 @@ import (
 	"log"
 	"os"
 	"path"
-	"time"
 )
 
 const (
 	CAMERA_UPLOADS = "/Camera Uploads"
+	IMAGE_BASE     = "/Camera Uploads"
+	VIDEO_BASE     = "/Videos"
 )
 
 var (
@@ -36,29 +37,37 @@ func main() {
 		log.Fatalf("Erorr from dbx.Ls: %s\n", err.Error())
 	}
 
-	chan_time := make(chan time.Time)
+	chan_mkdirarg := make(chan MkdirArg)
 	chan_finish := make(chan int)
 
-	go Mkdir(dbx, chan_time, chan_finish)
+	go Mkdir(dbx, chan_mkdirarg, chan_finish)
 
 	mv_args := make([]MvArg, 0)
 	for _, ls_result := range res {
-		if !isImage(ls_result.path) {
+		base_dir := ""
+		if isImage(ls_result.path) {
+			base_dir = IMAGE_BASE
+		} else if isVideo(ls_result.path) {
+			base_dir = VIDEO_BASE
+		} else {
 			continue
 		}
-		dir, file := path.Split(ls_result.path)
+		_, file := path.Split(ls_result.path)
 		date_string := ls_result.lastModified.Format(FORMAT)
-		to_path := path.Join(dir, date_string, file)
+		to_path := path.Join(base_dir, date_string, file)
 		mv_args = append(mv_args, MvArg{
 			src:  ls_result.path,
 			dest: to_path,
 		})
 		// try to create folder
-		chan_time <- ls_result.lastModified
+		chan_mkdirarg <- MkdirArg{
+			base: base_dir,
+			date: ls_result.lastModified,
+		}
 	}
 
 	// make sure we terminate the goroutine for Mkdir
-	close(chan_time)
+	close(chan_mkdirarg)
 	created_folders := <-chan_finish
 	fmt.Printf("Created %d folders...\n", created_folders)
 

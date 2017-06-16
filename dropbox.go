@@ -19,6 +19,11 @@ type MvArg struct {
 	dest string
 }
 
+type MkdirArg struct {
+	base string
+	date time.Time
+}
+
 type LsResult struct {
 	path         string
 	lastModified time.Time
@@ -88,15 +93,17 @@ func (dbx *Dbx) MvBatch(mv_args []MvArg) error {
 	return err
 }
 
-func Mkdir(dbx *Dbx, c chan time.Time, finish chan int) {
-	date_set := make(DateSet)
+func Mkdir(dbx *Dbx, c chan MkdirArg, finish chan int) {
+	dir_set := make(DirSet)
 	created := 0
-	for t := range c {
-		if date_set.Contains(t) {
+	for mkdir_arg := range c {
+		t := mkdir_arg.date
+		base_dir := mkdir_arg.base
+		if dir_set.Contains(mkdir_arg) {
 			continue
 		}
-		date_set.Add(t)
-		err := dbx.Mkdir(path.Join(CAMERA_UPLOADS, t.Format(FORMAT)))
+		dir_set.Add(mkdir_arg)
+		err := dbx.Mkdir(path.Join(base_dir, t.Format(FORMAT)))
 		if err != nil {
 			if !strings.Contains(err.Error(), "conflict") {
 				fmt.Printf("Mkdir error: %s\n", err.Error())
