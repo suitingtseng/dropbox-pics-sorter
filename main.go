@@ -43,7 +43,7 @@ func main() {
 
 	mv_args := make([]MvArg, 0)
 	for _, ls_result := range res {
-		if isImage(ls_result.path) {
+		if !isImage(ls_result.path) {
 			continue
 		}
 		dir, file := path.Split(ls_result.path)
