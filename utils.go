@@ -18,7 +18,7 @@ func (s DirSet) Contains(arg MkdirArg) bool {
 }
 
 func isImage(path string) bool {
-	formats := []string{".jpg", ".png"}
+	formats := []string{".jpg", ".png", ".gif"}
 	for _, format := range formats {
 		if strings.HasSuffix(path, format) {
 			return true
