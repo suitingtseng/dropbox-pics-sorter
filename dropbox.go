@@ -63,7 +63,7 @@ func (dbx *Dbx) Ls(path string) ([]LsResult, error) {
 	ls_results := make([]LsResult, 0)
 	for _, entry := range (*res).Entries {
 		meta, ok := entry.(*files.FileMetadata)
-		if !ok || !isImage(meta.PathLower) {
+		if !ok {
 			continue
 		}
 		ls_results = append(ls_results, LsResult{
