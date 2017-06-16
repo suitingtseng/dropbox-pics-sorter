@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package auth
+package team_log
 
 import (
 	"bytes"
@@ -32,22 +32,22 @@ import (
 
 // Client interface describes all routes in this namespace
 type Client interface {
-	// TokenFromOauth1 : Creates an OAuth 2.0 access token from the supplied
-	// OAuth 1.0 access token.
-	TokenFromOauth1(arg *TokenFromOAuth1Arg) (res *TokenFromOAuth1Result, err error)
-	// TokenRevoke : Disables the access token used to authenticate the call.
-	TokenRevoke() (err error)
+	// GetEvents : Retrieves team events. Permission : Team Auditing.
+	GetEvents(arg *GetTeamEventsArg) (res *GetTeamEventsResult, err error)
+	// GetEventsContinue : Once a cursor has been retrieved from `getEvents`,
+	// use this to paginate through all events. Permission : Team Auditing.
+	GetEventsContinue(arg *GetTeamEventsContinueArg) (res *GetTeamEventsResult, err error)
 }
 
 type apiImpl dropbox.Context
 
-//TokenFromOauth1APIError is an error-wrapper for the token/from_oauth1 route
-type TokenFromOauth1APIError struct {
+//GetEventsAPIError is an error-wrapper for the get_events route
+type GetEventsAPIError struct {
 	dropbox.APIError
-	EndpointError *TokenFromOAuth1Error `json:"error"`
+	EndpointError *GetTeamEventsError `json:"error"`
 }
 
-func (dbx *apiImpl) TokenFromOauth1(arg *TokenFromOAuth1Arg) (res *TokenFromOAuth1Result, err error) {
+func (dbx *apiImpl) GetEvents(arg *GetTeamEventsArg) (res *GetTeamEventsResult, err error) {
 	cli := dbx.Client
 
 	if dbx.Config.Verbose {
@@ -61,11 +61,8 @@ func (dbx *apiImpl) TokenFromOauth1(arg *TokenFromOAuth1Arg) (res *TokenFromOAut
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	if dbx.Config.AsMemberID != "" {
-		headers["Dropbox-API-Select-User"] = dbx.Config.AsMemberID
-	}
 
-	req, err := (*dropbox.Context)(dbx).NewRequest("api", "rpc", true, "auth", "token/from_oauth1", headers, bytes.NewReader(b))
+	req, err := (*dropbox.Context)(dbx).NewRequest("api", "rpc", true, "team_log", "get_events", headers, bytes.NewReader(b))
 	if err != nil {
 		return
 	}
@@ -99,7 +96,7 @@ func (dbx *apiImpl) TokenFromOauth1(arg *TokenFromOAuth1Arg) (res *TokenFromOAut
 		return
 	}
 	if resp.StatusCode == http.StatusConflict {
-		var apiError TokenFromOauth1APIError
+		var apiError GetEventsAPIError
 		err = json.Unmarshal(body, &apiError)
 		if err != nil {
 			return
@@ -121,21 +118,28 @@ func (dbx *apiImpl) TokenFromOauth1(arg *TokenFromOAuth1Arg) (res *TokenFromOAut
 	return
 }
 
-//TokenRevokeAPIError is an error-wrapper for the token/revoke route
-type TokenRevokeAPIError struct {
+//GetEventsContinueAPIError is an error-wrapper for the get_events/continue route
+type GetEventsContinueAPIError struct {
 	dropbox.APIError
-	EndpointError struct{} `json:"error"`
+	EndpointError *GetTeamEventsContinueError `json:"error"`
 }
 
-func (dbx *apiImpl) TokenRevoke() (err error) {
+func (dbx *apiImpl) GetEventsContinue(arg *GetTeamEventsContinueArg) (res *GetTeamEventsResult, err error) {
 	cli := dbx.Client
 
-	headers := map[string]string{}
-	if dbx.Config.AsMemberID != "" {
-		headers["Dropbox-API-Select-User"] = dbx.Config.AsMemberID
+	if dbx.Config.Verbose {
+		log.Printf("arg: %v", arg)
+	}
+	b, err := json.Marshal(arg)
+	if err != nil {
+		return
 	}
 
-	req, err := (*dropbox.Context)(dbx).NewRequest("api", "rpc", true, "auth", "token/revoke", headers, nil)
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	req, err := (*dropbox.Context)(dbx).NewRequest("api", "rpc", true, "team_log", "get_events/continue", headers, bytes.NewReader(b))
 	if err != nil {
 		return
 	}
@@ -161,10 +165,15 @@ func (dbx *apiImpl) TokenRevoke() (err error) {
 		log.Printf("body: %s", body)
 	}
 	if resp.StatusCode == http.StatusOK {
+		err = json.Unmarshal(body, &res)
+		if err != nil {
+			return
+		}
+
 		return
 	}
 	if resp.StatusCode == http.StatusConflict {
-		var apiError TokenRevokeAPIError
+		var apiError GetEventsContinueAPIError
 		err = json.Unmarshal(body, &apiError)
 		if err != nil {
 			return

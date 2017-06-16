@@ -1,12 +1,10 @@
-# TODO(kelkabany/krieb): This spec is under development. Do not make public!
-
 namespace sharing
 
 import async
 import common
 import files
 import team_common
-import users
+import users_common
 
 alias DropboxId = String(min_length=1)
 
@@ -42,6 +40,8 @@ struct FolderPolicy
         "Who can add and remove members from this shared folder."
     shared_link_policy SharedLinkPolicy
         "Who links can be shared with."
+    viewer_info_policy ViewerInfoPolicy?
+        "Who can enable/disable viewer info for this shared folder."
 
     example default
         member_policy = anyone
@@ -54,8 +54,12 @@ union FolderAction
 
     change_options
         "Change folder options, such as who can be invited to join the folder."
+    disable_viewer_info
+        "Disable viewer information for this folder."
     edit_contents
         "Change or edit contents of the folder."
+    enable_viewer_info
+        "Enable viewer information on the folder."
     invite_editor
         "Invite a user or group to join the folder with read and write permission."
     invite_viewer
@@ -124,8 +128,7 @@ struct MemberPermission
     allow Boolean
         "True if the user is allowed to take the action."
     reason PermissionDeniedReason?
-        "The reason why the user is denied the permission. Not present if the action
-        is allowed"
+        "The reason why the user is denied the permission. Not present if the action is allowed."
 
     example default
         action = make_owner
@@ -149,11 +152,22 @@ union PermissionDeniedReason
         "Target is not an active member of the team."
     folder_is_limited_team_folder
         "Folder is team folder for a limited team."
+    owner_not_on_team
+        "The content owner needs to be on a Dropbox team to perform this action."
+    permission_denied
+        "The user does not have permission to perform this action on the link."
+    restricted_by_team
+        "The user's team policy prevents performing this action on the link."
+    user_account_type
+        "The user's account type does not support this action."
+    user_not_on_team
+        "The user needs to be on a Dropbox team to perform this action."
+    folder_is_inside_shared_folder
+        "Folder is inside of another shared folder."
 
 union AclUpdatePolicy
-    "Policy governing who can change a shared folder's access control list
-    (ACL). In other words, who can add, remove, or change the privileges of
-    members."
+    "Who can change a shared folder's access control list (ACL). In other words, who can add,
+    remove, or change the privileges of members."
 
     owner
         "Only the owner can update the ACL."
@@ -162,10 +176,12 @@ union AclUpdatePolicy
         editors on the same team."
 
 union SharedLinkPolicy
-    "Policy governing who can view shared links."
+    "Who can view shared links in this folder."
 
     anyone
         "Links can be shared with anyone."
+    team
+        "Links can be shared with anyone on the same team as the owner."
     members
         "Links can only be shared among members of the shared folder."
 
@@ -192,7 +208,7 @@ struct UserInfo
     "Basic information about a user. Use :route:`users.get_account` and
     :route:`users.get_account_batch` to obtain more detailed information."
 
-    account_id users.AccountId
+    account_id users_common.AccountId
         "The account ID of the user."
     same_team Boolean
         "If the user is in the same team as current user."
@@ -277,49 +293,55 @@ struct SharedFolderMetadataBase
 
     access_type AccessLevel
         "The current user's access level for this shared folder."
+    is_inside_team_folder Boolean
+        "Whether this folder is inside of a team folder."
     is_team_folder Boolean
         "Whether this folder is a
         :link:`team folder https://www.dropbox.com/en/help/986`."
-    policy FolderPolicy
-        "Policies governing this shared folder."
     owner_team users.Team?
         "The team that owns the folder. This field is not present if the folder
         is not owned by a team."
     parent_shared_folder_id common.SharedFolderId?
         "The ID of the parent shared folder. This field is present only if the
         folder is contained within another shared folder."
+    path_lower String?
+        "The lower-cased full path of this shared folder. Absent for unmounted folders."
 
     example default
         access_type = owner
+        is_inside_team_folder = false
         is_team_folder = false
-        policy = default
         owner_team = default
 
 # NOTE: If you modify this struct, also modify InternalSharedFolderMetadata,
-# which is used by mobile/web
+# which is used by mobile
 struct SharedFolderMetadata extends SharedFolderMetadataBase
     "The metadata which includes basic information about the shared folder."
-
-    path_lower String?
-        "The lower-cased full path of this shared folder. Absent for unmounted folders."
+    link_metadata SharedContentLinkMetadata?
+        "The metadata of the shared content link to this shared folder. Absent if there is no
+        link on the folder. This is for an unreleased feature so it may not be returned yet."
     name String
         "The name of the this shared folder."
-    shared_folder_id common.SharedFolderId
-        "The ID of the shared folder."
     permissions List(FolderPermission)?
         "Actions the current user may perform on the folder and its contents.
         The set of permissions corresponds to the FolderActions in the request."
-    time_invited common.DropboxTimestamp
-        "Timestamp indicating when the current user was invited to this shared folder."
+    policy FolderPolicy
+        "Policies governing this shared folder."
     preview_url String
         "URL for displaying a web preview of the shared folder."
+    shared_folder_id common.SharedFolderId
+        "The ID of the shared folder."
+    time_invited common.DropboxTimestamp
+        "Timestamp indicating when the current user was invited to this shared folder."
 
     example default
         path_lower = "/dir"
+        link_metadata = default
         name = "dir"
         shared_folder_id = "84528192421"
         permissions = []
         access_type = owner
+        is_inside_team_folder = false
         is_team_folder = false
         policy = default
         time_invited = "2016-01-20T00:00:00Z"
@@ -359,6 +381,14 @@ struct ParentFolderAccessInfo
         "The identifier of the parent shared folder."
     permissions List(MemberPermission)
         "The user's permissions for the parent shared folder."
+    path String
+        "The full path to the parent shared folder relative to the acting user's root."
+
+    example default
+        folder_name = "Shared Folder"
+        shared_folder_id = "84528192421"
+        permissions = []
+        path = "/Shared Folder"
 
 # --
 
@@ -374,9 +404,9 @@ struct ListFoldersArgs
     limit UInt32(min_value=1, max_value=1000) = 1000
         "The maximum number of results to return per request."
     actions List(FolderAction)?
-        "This is a list indicating whether each returned folder data entry will
-        include a boolean field :field:`FolderPermission.allow` that describes
-        whether the current user can perform the `FolderAction` on the folder."
+        "A list of `FolderAction`s corresponding to `FolderPermission`s that should appear in the
+         response's :field:`SharedFolderMetadata.permissions` field describing the actions the
+         authenticated user can perform on the folder."
 
     example default
         limit = 100
@@ -454,14 +484,15 @@ route get_folder_metadata(GetMetadataArgs, SharedFolderMetadata, SharedFolderAcc
 
     attrs
         owner = "sfi"
+        api_group = "truelink-alpha"
 
 struct GetMetadataArgs
     shared_folder_id common.SharedFolderId
         "The ID for the shared folder."
     actions List(FolderAction)?
-        "This is a list indicating whether the returned folder data will include a boolean value
-         :field:`FolderPermission.allow` that describes whether the current user can perform the
-         FolderAction on the folder."
+        "A list of `FolderAction`s corresponding to `FolderPermission`s that should appear in the
+         response's :field:`SharedFolderMetadata.permissions` field describing the actions the
+         authenticated user can perform on the folder."
 
     example default
         shared_folder_id = "84528192421"
@@ -544,7 +575,7 @@ union ListFolderMembersContinueError
 
 # --
 
-route share_folder(ShareFolderArg, ShareFolderLaunch, ShareFolderError)
+route share_folder(ShareFolderArg, ShareFolderLaunch, ShareFolderError )
     "Share a folder with collaborators.
 
     Most sharing will be completed synchronously. Large folders will be
@@ -559,22 +590,32 @@ route share_folder(ShareFolderArg, ShareFolderLaunch, ShareFolderError)
 
     attrs
         owner = "sfi"
+        api_group = "truelink-alpha"
 
 struct ShareFolderArg
     path files.WritePath
         "The path to the folder to share. If it does not exist, then a new one
         is created."
-    member_policy MemberPolicy = anyone
+    member_policy MemberPolicy?
         "Who can be a member of this shared folder. Only applicable if the
         current user is on a team."
-    acl_update_policy AclUpdatePolicy = owner
+    acl_update_policy AclUpdatePolicy?
         "Who can add and remove members of this shared folder."
-    shared_link_policy SharedLinkPolicy = anyone
+    shared_link_policy SharedLinkPolicy?
         "The policy to apply to shared links created for content inside this
         shared folder.  The current user must be on a team to set this policy to
         :field:`SharedLinkPolicy.members`."
     force_async Boolean = false
         "Whether to force the share to happen asynchronously."
+    actions List(FolderAction)?
+        "A list of `FolderAction`s corresponding to `FolderPermission`s that should appear in the
+         response's :field:`SharedFolderMetadata.permissions` field describing the actions the
+         authenticated user can perform on the folder."
+    link_settings LinkSettings?
+        "Settings on the link for this folder."
+    viewer_info_policy ViewerInfoPolicy?
+        "Who can enable/disable viewer info for this shared folder."
+
 
     example default
         path = "/example/workspace"
@@ -625,8 +666,6 @@ union SharePathError
         "We do not support sharing a Mac OS X package."
     inside_osx_package
         "We do not support sharing a folder inside a Mac OS X package."
-    invalid_path_root files.PathRootError
-        "The path root parameter provided is invalid."
 
 # --
 
@@ -699,6 +738,7 @@ route unshare_folder(UnshareFolderArg, async.LaunchEmptyResult, UnshareFolderErr
 
     attrs
         owner = "sfi"
+        api_group = "truelink-alpha"
 
 struct UnshareFolderArg
     shared_folder_id common.SharedFolderId
@@ -769,9 +809,10 @@ route update_folder_policy(UpdateFolderPolicyArg, SharedFolderMetadata, UpdateFo
 
     attrs
         owner = "sfi"
+        api_group = "truelink-alpha"
 
 struct UpdateFolderPolicyArg
-    "If any of the policy's are unset, then they retain their current setting."
+    "If any of the policies are unset, then they retain their current setting."
 
     shared_folder_id common.SharedFolderId
         "The ID for the shared folder."
@@ -780,11 +821,18 @@ struct UpdateFolderPolicyArg
         current user is on a team."
     acl_update_policy AclUpdatePolicy?
         "Who can add and remove members of this shared folder."
+    viewer_info_policy ViewerInfoPolicy?
+        "Who can enable/disable viewer info for this shared folder."
     shared_link_policy SharedLinkPolicy?
         "The policy to apply to shared links created for content inside this
         shared folder. The current user must be on a team to set this policy to
         :field:`SharedLinkPolicy.members`."
-
+    link_settings LinkSettings?
+        "Settings on the link for this folder."
+    actions List(FolderAction)?
+        "A list of `FolderAction`s corresponding to `FolderPermission`s that should appear in the
+         response's :field:`SharedFolderMetadata.permissions` field describing the actions the
+         authenticated user can perform on the folder."
     example default
         shared_folder_id = "84528192421"
         member_policy = team
@@ -803,6 +851,8 @@ union UpdateFolderPolicyError
         :field:`ShareFolderArg.shared_link_policy`."
     no_permission
         "The current user does not have permission to perform this action."
+    team_folder
+        "This action cannot be performed on a team shared folder."
 
 # --
 

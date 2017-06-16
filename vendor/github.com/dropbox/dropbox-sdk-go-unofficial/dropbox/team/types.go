@@ -63,6 +63,8 @@ type ActiveWebSession struct {
 	Os string `json:"os"`
 	// Browser : Information on the browser used for this web session
 	Browser string `json:"browser"`
+	// Expires : The time this session expires
+	Expires time.Time `json:"expires,omitempty"`
 }
 
 // NewActiveWebSession returns a new ActiveWebSession instance
@@ -152,6 +154,55 @@ func NewBaseDfbReport(StartDate string) *BaseDfbReport {
 	s := new(BaseDfbReport)
 	s.StartDate = StartDate
 	return s
+}
+
+// BaseTeamFolderError : Base error that all errors for existing team folders
+// should extend.
+type BaseTeamFolderError struct {
+	dropbox.Tagged
+	// AccessError : has no documentation (yet)
+	AccessError *TeamFolderAccessError `json:"access_error,omitempty"`
+	// StatusError : has no documentation (yet)
+	StatusError *TeamFolderInvalidStatusError `json:"status_error,omitempty"`
+}
+
+// Valid tag values for BaseTeamFolderError
+const (
+	BaseTeamFolderErrorAccessError = "access_error"
+	BaseTeamFolderErrorStatusError = "status_error"
+	BaseTeamFolderErrorOther       = "other"
+)
+
+// UnmarshalJSON deserializes into a BaseTeamFolderError instance
+func (u *BaseTeamFolderError) UnmarshalJSON(body []byte) error {
+	type wrap struct {
+		dropbox.Tagged
+		// AccessError : has no documentation (yet)
+		AccessError json.RawMessage `json:"access_error,omitempty"`
+		// StatusError : has no documentation (yet)
+		StatusError json.RawMessage `json:"status_error,omitempty"`
+	}
+	var w wrap
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
+		return err
+	}
+	u.Tag = w.Tag
+	switch u.Tag {
+	case "access_error":
+		err = json.Unmarshal(w.AccessError, &u.AccessError)
+
+		if err != nil {
+			return err
+		}
+	case "status_error":
+		err = json.Unmarshal(w.StatusError, &u.StatusError)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DateRange : Input arguments that can be provided for most reports.
@@ -269,6 +320,93 @@ func NewDevicesActive(Windows []uint64, Macos []uint64, Linux []uint64, Ios []ui
 	s.Android = Android
 	s.Other = Other
 	s.Total = Total
+	return s
+}
+
+// Feature : A set of features that Dropbox for Business account support.
+type Feature struct {
+	dropbox.Tagged
+}
+
+// Valid tag values for Feature
+const (
+	FeatureUploadApiRateLimit = "upload_api_rate_limit"
+	FeatureOther              = "other"
+)
+
+// FeatureValue : The values correspond to entries in `Feature`. You may get
+// different value according to your Dropbox for Business plan.
+type FeatureValue struct {
+	dropbox.Tagged
+	// UploadApiRateLimit : has no documentation (yet)
+	UploadApiRateLimit *UploadApiRateLimitValue `json:"upload_api_rate_limit,omitempty"`
+}
+
+// Valid tag values for FeatureValue
+const (
+	FeatureValueUploadApiRateLimit = "upload_api_rate_limit"
+	FeatureValueOther              = "other"
+)
+
+// UnmarshalJSON deserializes into a FeatureValue instance
+func (u *FeatureValue) UnmarshalJSON(body []byte) error {
+	type wrap struct {
+		dropbox.Tagged
+		// UploadApiRateLimit : has no documentation (yet)
+		UploadApiRateLimit json.RawMessage `json:"upload_api_rate_limit,omitempty"`
+	}
+	var w wrap
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
+		return err
+	}
+	u.Tag = w.Tag
+	switch u.Tag {
+	case "upload_api_rate_limit":
+		err = json.Unmarshal(w.UploadApiRateLimit, &u.UploadApiRateLimit)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FeaturesGetValuesBatchArg : has no documentation (yet)
+type FeaturesGetValuesBatchArg struct {
+	// Features : A list of features in `Feature`. If the list is empty, this
+	// route will return `FeaturesGetValuesBatchError`.
+	Features []*Feature `json:"features"`
+}
+
+// NewFeaturesGetValuesBatchArg returns a new FeaturesGetValuesBatchArg instance
+func NewFeaturesGetValuesBatchArg(Features []*Feature) *FeaturesGetValuesBatchArg {
+	s := new(FeaturesGetValuesBatchArg)
+	s.Features = Features
+	return s
+}
+
+// FeaturesGetValuesBatchError : has no documentation (yet)
+type FeaturesGetValuesBatchError struct {
+	dropbox.Tagged
+}
+
+// Valid tag values for FeaturesGetValuesBatchError
+const (
+	FeaturesGetValuesBatchErrorEmptyFeaturesList = "empty_features_list"
+	FeaturesGetValuesBatchErrorOther             = "other"
+)
+
+// FeaturesGetValuesBatchResult : has no documentation (yet)
+type FeaturesGetValuesBatchResult struct {
+	// Values : has no documentation (yet)
+	Values []*FeatureValue `json:"values"`
+}
+
+// NewFeaturesGetValuesBatchResult returns a new FeaturesGetValuesBatchResult instance
+func NewFeaturesGetValuesBatchResult(Values []*FeatureValue) *FeaturesGetValuesBatchResult {
+	s := new(FeaturesGetValuesBatchResult)
+	s.Values = Values
 	return s
 }
 
@@ -449,7 +587,7 @@ type GroupCreateArg struct {
 	// external ID to the group.
 	GroupExternalId string `json:"group_external_id,omitempty"`
 	// GroupManagementType : Whether the team can be managed by selected users,
-	// or only by team admins
+	// or only by team admins.
 	GroupManagementType *team_common.GroupManagementType `json:"group_management_type,omitempty"`
 }
 
@@ -467,10 +605,11 @@ type GroupCreateError struct {
 
 // Valid tag values for GroupCreateError
 const (
-	GroupCreateErrorGroupNameAlreadyUsed   = "group_name_already_used"
-	GroupCreateErrorGroupNameInvalid       = "group_name_invalid"
-	GroupCreateErrorExternalIdAlreadyInUse = "external_id_already_in_use"
-	GroupCreateErrorOther                  = "other"
+	GroupCreateErrorGroupNameAlreadyUsed         = "group_name_already_used"
+	GroupCreateErrorGroupNameInvalid             = "group_name_invalid"
+	GroupCreateErrorExternalIdAlreadyInUse       = "external_id_already_in_use"
+	GroupCreateErrorSystemManagedGroupDisallowed = "system_managed_group_disallowed"
+	GroupCreateErrorOther                        = "other"
 )
 
 // GroupSelectorError : Error that can be raised when `GroupSelector` is used.
@@ -482,6 +621,17 @@ type GroupSelectorError struct {
 const (
 	GroupSelectorErrorGroupNotFound = "group_not_found"
 	GroupSelectorErrorOther         = "other"
+)
+
+// GroupSelectorWithTeamGroupError : Error that can be raised when
+// `GroupSelector` is used and team groups are disallowed from being used.
+type GroupSelectorWithTeamGroupError struct {
+	dropbox.Tagged
+}
+
+// Valid tag values for GroupSelectorWithTeamGroupError
+const (
+	GroupSelectorWithTeamGroupErrorSystemManagedGroupDisallowed = "system_managed_group_disallowed"
 )
 
 // GroupDeleteError : has no documentation (yet)
@@ -642,26 +792,30 @@ func (u *GroupMembersAddError) UnmarshalJSON(body []byte) error {
 		UserCannotBeManagerOfCompanyManagedGroup json.RawMessage `json:"user_cannot_be_manager_of_company_managed_group,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "members_not_in_team":
-		if err := json.Unmarshal(body, &u.MembersNotInTeam); err != nil {
+		err = json.Unmarshal(body, &u.MembersNotInTeam)
+
+		if err != nil {
 			return err
 		}
-
 	case "users_not_found":
-		if err := json.Unmarshal(body, &u.UsersNotFound); err != nil {
+		err = json.Unmarshal(body, &u.UsersNotFound)
+
+		if err != nil {
 			return err
 		}
-
 	case "user_cannot_be_manager_of_company_managed_group":
-		if err := json.Unmarshal(body, &u.UserCannotBeManagerOfCompanyManagedGroup); err != nil {
+		err = json.Unmarshal(body, &u.UserCannotBeManagerOfCompanyManagedGroup)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -718,12 +872,50 @@ const (
 // GroupMembersRemoveError : has no documentation (yet)
 type GroupMembersRemoveError struct {
 	dropbox.Tagged
+	// MembersNotInTeam : These members are not part of your team.
+	MembersNotInTeam []string `json:"members_not_in_team,omitempty"`
+	// UsersNotFound : These users were not found in Dropbox.
+	UsersNotFound []string `json:"users_not_found,omitempty"`
 }
 
 // Valid tag values for GroupMembersRemoveError
 const (
-	GroupMembersRemoveErrorGroupNotInTeam = "group_not_in_team"
+	GroupMembersRemoveErrorGroupNotInTeam   = "group_not_in_team"
+	GroupMembersRemoveErrorMembersNotInTeam = "members_not_in_team"
+	GroupMembersRemoveErrorUsersNotFound    = "users_not_found"
 )
+
+// UnmarshalJSON deserializes into a GroupMembersRemoveError instance
+func (u *GroupMembersRemoveError) UnmarshalJSON(body []byte) error {
+	type wrap struct {
+		dropbox.Tagged
+		// MembersNotInTeam : These members are not part of your team.
+		MembersNotInTeam json.RawMessage `json:"members_not_in_team,omitempty"`
+		// UsersNotFound : These users were not found in Dropbox.
+		UsersNotFound json.RawMessage `json:"users_not_found,omitempty"`
+	}
+	var w wrap
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
+		return err
+	}
+	u.Tag = w.Tag
+	switch u.Tag {
+	case "members_not_in_team":
+		err = json.Unmarshal(body, &u.MembersNotInTeam)
+
+		if err != nil {
+			return err
+		}
+	case "users_not_found":
+		err = json.Unmarshal(body, &u.UsersNotFound)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // GroupMembersSelector : Argument for selecting a group and a list of users.
 type GroupMembersSelector struct {
@@ -784,21 +976,24 @@ func (u *GroupSelector) UnmarshalJSON(body []byte) error {
 		dropbox.Tagged
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "group_id":
-		if err := json.Unmarshal(body, &u.GroupId); err != nil {
+		err = json.Unmarshal(body, &u.GroupId)
+
+		if err != nil {
 			return err
 		}
-
 	case "group_external_id":
-		if err := json.Unmarshal(body, &u.GroupExternalId); err != nil {
+		err = json.Unmarshal(body, &u.GroupExternalId)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -874,21 +1069,24 @@ func (u *GroupsGetInfoItem) UnmarshalJSON(body []byte) error {
 		GroupInfo json.RawMessage `json:"group_info,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "id_not_found":
-		if err := json.Unmarshal(body, &u.IdNotFound); err != nil {
+		err = json.Unmarshal(body, &u.IdNotFound)
+
+		if err != nil {
 			return err
 		}
-
 	case "group_info":
-		if err := json.Unmarshal(body, &u.GroupInfo); err != nil {
+		err = json.Unmarshal(body, &u.GroupInfo)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -1050,21 +1248,24 @@ func (u *GroupsSelector) UnmarshalJSON(body []byte) error {
 		GroupExternalIds json.RawMessage `json:"group_external_ids,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "group_ids":
-		if err := json.Unmarshal(body, &u.GroupIds); err != nil {
+		err = json.Unmarshal(body, &u.GroupIds)
+
+		if err != nil {
 			return err
 		}
-
 	case "group_external_ids":
-		if err := json.Unmarshal(body, &u.GroupExternalIds); err != nil {
+		err = json.Unmarshal(body, &u.GroupExternalIds)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -1385,11 +1586,14 @@ type MemberAddArg struct {
 	// MemberEmail : has no documentation (yet)
 	MemberEmail string `json:"member_email"`
 	// MemberGivenName : Member's first name.
-	MemberGivenName string `json:"member_given_name"`
+	MemberGivenName string `json:"member_given_name,omitempty"`
 	// MemberSurname : Member's last name.
-	MemberSurname string `json:"member_surname"`
+	MemberSurname string `json:"member_surname,omitempty"`
 	// MemberExternalId : External ID for member.
 	MemberExternalId string `json:"member_external_id,omitempty"`
+	// MemberPersistentId : Persistent ID for member. This field is only
+	// available to teams using persistent ID SAML configuration.
+	MemberPersistentId string `json:"member_persistent_id,omitempty"`
 	// SendWelcomeEmail : Whether to send a welcome email to the member. If
 	// send_welcome_email is false, no email invitation will be sent to the
 	// user. This may be useful for apps using single sign-on (SSO) flows for
@@ -1400,11 +1604,9 @@ type MemberAddArg struct {
 }
 
 // NewMemberAddArg returns a new MemberAddArg instance
-func NewMemberAddArg(MemberEmail string, MemberGivenName string, MemberSurname string) *MemberAddArg {
+func NewMemberAddArg(MemberEmail string) *MemberAddArg {
 	s := new(MemberAddArg)
 	s.MemberEmail = MemberEmail
-	s.MemberGivenName = MemberGivenName
-	s.MemberSurname = MemberSurname
 	s.SendWelcomeEmail = true
 	s.Role = &AdminTier{Tagged: dropbox.Tagged{"member_only"}}
 	return s
@@ -1439,21 +1641,30 @@ type MemberAddResult struct {
 	// DuplicateExternalMemberId : A user with the given external member ID
 	// already exists on the team (including in recoverable state).
 	DuplicateExternalMemberId string `json:"duplicate_external_member_id,omitempty"`
+	// DuplicateMemberPersistentId : A user with the given persistent ID already
+	// exists on the team (including in recoverable state).
+	DuplicateMemberPersistentId string `json:"duplicate_member_persistent_id,omitempty"`
+	// PersistentIdDisabled : Persistent ID is only available to teams with
+	// persistent ID SAML configuration. Please contact Dropbox for more
+	// information.
+	PersistentIdDisabled string `json:"persistent_id_disabled,omitempty"`
 	// UserCreationFailed : User creation has failed.
 	UserCreationFailed string `json:"user_creation_failed,omitempty"`
 }
 
 // Valid tag values for MemberAddResult
 const (
-	MemberAddResultSuccess                    = "success"
-	MemberAddResultTeamLicenseLimit           = "team_license_limit"
-	MemberAddResultFreeTeamMemberLimitReached = "free_team_member_limit_reached"
-	MemberAddResultUserAlreadyOnTeam          = "user_already_on_team"
-	MemberAddResultUserOnAnotherTeam          = "user_on_another_team"
-	MemberAddResultUserAlreadyPaired          = "user_already_paired"
-	MemberAddResultUserMigrationFailed        = "user_migration_failed"
-	MemberAddResultDuplicateExternalMemberId  = "duplicate_external_member_id"
-	MemberAddResultUserCreationFailed         = "user_creation_failed"
+	MemberAddResultSuccess                     = "success"
+	MemberAddResultTeamLicenseLimit            = "team_license_limit"
+	MemberAddResultFreeTeamMemberLimitReached  = "free_team_member_limit_reached"
+	MemberAddResultUserAlreadyOnTeam           = "user_already_on_team"
+	MemberAddResultUserOnAnotherTeam           = "user_on_another_team"
+	MemberAddResultUserAlreadyPaired           = "user_already_paired"
+	MemberAddResultUserMigrationFailed         = "user_migration_failed"
+	MemberAddResultDuplicateExternalMemberId   = "duplicate_external_member_id"
+	MemberAddResultDuplicateMemberPersistentId = "duplicate_member_persistent_id"
+	MemberAddResultPersistentIdDisabled        = "persistent_id_disabled"
+	MemberAddResultUserCreationFailed          = "user_creation_failed"
 )
 
 // UnmarshalJSON deserializes into a MemberAddResult instance
@@ -1464,56 +1675,78 @@ func (u *MemberAddResult) UnmarshalJSON(body []byte) error {
 		Success json.RawMessage `json:"success,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "success":
-		if err := json.Unmarshal(body, &u.Success); err != nil {
+		err = json.Unmarshal(body, &u.Success)
+
+		if err != nil {
 			return err
 		}
-
 	case "team_license_limit":
-		if err := json.Unmarshal(body, &u.TeamLicenseLimit); err != nil {
+		err = json.Unmarshal(body, &u.TeamLicenseLimit)
+
+		if err != nil {
 			return err
 		}
-
 	case "free_team_member_limit_reached":
-		if err := json.Unmarshal(body, &u.FreeTeamMemberLimitReached); err != nil {
+		err = json.Unmarshal(body, &u.FreeTeamMemberLimitReached)
+
+		if err != nil {
 			return err
 		}
-
 	case "user_already_on_team":
-		if err := json.Unmarshal(body, &u.UserAlreadyOnTeam); err != nil {
+		err = json.Unmarshal(body, &u.UserAlreadyOnTeam)
+
+		if err != nil {
 			return err
 		}
-
 	case "user_on_another_team":
-		if err := json.Unmarshal(body, &u.UserOnAnotherTeam); err != nil {
+		err = json.Unmarshal(body, &u.UserOnAnotherTeam)
+
+		if err != nil {
 			return err
 		}
-
 	case "user_already_paired":
-		if err := json.Unmarshal(body, &u.UserAlreadyPaired); err != nil {
+		err = json.Unmarshal(body, &u.UserAlreadyPaired)
+
+		if err != nil {
 			return err
 		}
-
 	case "user_migration_failed":
-		if err := json.Unmarshal(body, &u.UserMigrationFailed); err != nil {
+		err = json.Unmarshal(body, &u.UserMigrationFailed)
+
+		if err != nil {
 			return err
 		}
-
 	case "duplicate_external_member_id":
-		if err := json.Unmarshal(body, &u.DuplicateExternalMemberId); err != nil {
+		err = json.Unmarshal(body, &u.DuplicateExternalMemberId)
+
+		if err != nil {
 			return err
 		}
+	case "duplicate_member_persistent_id":
+		err = json.Unmarshal(body, &u.DuplicateMemberPersistentId)
 
+		if err != nil {
+			return err
+		}
+	case "persistent_id_disabled":
+		err = json.Unmarshal(body, &u.PersistentIdDisabled)
+
+		if err != nil {
+			return err
+		}
 	case "user_creation_failed":
-		if err := json.Unmarshal(body, &u.UserCreationFailed); err != nil {
+		err = json.Unmarshal(body, &u.UserCreationFailed)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -1576,6 +1809,12 @@ type MemberProfile struct {
 	// MembershipType : The user's membership type: full (normal team member) vs
 	// limited (does not use a license; no access to the team's shared quota).
 	MembershipType *TeamMembershipType `json:"membership_type"`
+	// JoinedOn : The date and time the user joined as a member of a specific
+	// team.
+	JoinedOn time.Time `json:"joined_on,omitempty"`
+	// PersistentId : Persistent ID that a team can attach to the user. The
+	// persistent ID is unique ID to be used for SAML authentication.
+	PersistentId string `json:"persistent_id,omitempty"`
 }
 
 // NewMemberProfile returns a new MemberProfile instance
@@ -1655,21 +1894,24 @@ func (u *MembersAddJobStatus) UnmarshalJSON(body []byte) error {
 		Complete json.RawMessage `json:"complete,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "complete":
-		if err := json.Unmarshal(body, &u.Complete); err != nil {
+		err = json.Unmarshal(body, &u.Complete)
+
+		if err != nil {
 			return err
 		}
-
 	case "failed":
-		if err := json.Unmarshal(body, &u.Failed); err != nil {
+		err = json.Unmarshal(body, &u.Failed)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -1694,16 +1936,18 @@ func (u *MembersAddLaunch) UnmarshalJSON(body []byte) error {
 		Complete json.RawMessage `json:"complete,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "complete":
-		if err := json.Unmarshal(body, &u.Complete); err != nil {
+		err = json.Unmarshal(body, &u.Complete)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -1786,21 +2030,24 @@ func (u *MembersGetInfoItem) UnmarshalJSON(body []byte) error {
 		MemberInfo json.RawMessage `json:"member_info,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "id_not_found":
-		if err := json.Unmarshal(body, &u.IdNotFound); err != nil {
+		err = json.Unmarshal(body, &u.IdNotFound)
+
+		if err != nil {
 			return err
 		}
-
 	case "member_info":
-		if err := json.Unmarshal(body, &u.MemberInfo); err != nil {
+		err = json.Unmarshal(body, &u.MemberInfo)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -2022,6 +2269,9 @@ type MembersSetProfileArg struct {
 	NewGivenName string `json:"new_given_name,omitempty"`
 	// NewSurname : New surname for member.
 	NewSurname string `json:"new_surname,omitempty"`
+	// NewPersistentId : New persistent ID. This field only available to teams
+	// using persistent ID SAML configuration.
+	NewPersistentId string `json:"new_persistent_id,omitempty"`
 }
 
 // NewMembersSetProfileArg returns a new MembersSetProfileArg instance
@@ -2044,6 +2294,8 @@ const (
 	MembersSetProfileErrorExternalIdUsedByOtherUser        = "external_id_used_by_other_user"
 	MembersSetProfileErrorSetProfileDisallowed             = "set_profile_disallowed"
 	MembersSetProfileErrorParamCannotBeEmpty               = "param_cannot_be_empty"
+	MembersSetProfileErrorPersistentIdDisabled             = "persistent_id_disabled"
+	MembersSetProfileErrorPersistentIdUsedByOtherUser      = "persistent_id_used_by_other_user"
 	MembersSetProfileErrorOther                            = "other"
 )
 
@@ -2125,7 +2377,7 @@ func NewMobileClientSession(SessionId string, DeviceName string, ClientType *Mob
 
 // RemovedStatus : has no documentation (yet)
 type RemovedStatus struct {
-	// IsRecoverable : True if the removed team member is recoverable
+	// IsRecoverable : True if the removed team member is recoverable.
 	IsRecoverable bool `json:"is_recoverable"`
 }
 
@@ -2184,26 +2436,30 @@ func (u *RevokeDeviceSessionArg) UnmarshalJSON(body []byte) error {
 		MobileClient json.RawMessage `json:"mobile_client,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "web_session":
-		if err := json.Unmarshal(body, &u.WebSession); err != nil {
+		err = json.Unmarshal(body, &u.WebSession)
+
+		if err != nil {
 			return err
 		}
-
 	case "desktop_client":
-		if err := json.Unmarshal(body, &u.DesktopClient); err != nil {
+		err = json.Unmarshal(body, &u.DesktopClient)
+
+		if err != nil {
 			return err
 		}
-
 	case "mobile_client":
-		if err := json.Unmarshal(body, &u.MobileClient); err != nil {
+		err = json.Unmarshal(body, &u.MobileClient)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -2385,50 +2641,13 @@ const (
 	TeamFolderAccessErrorOther               = "other"
 )
 
-// TeamFolderActivateError : has no documentation (yet)
+// TeamFolderActivateError :
 type TeamFolderActivateError struct {
 	dropbox.Tagged
-	// AccessError : has no documentation (yet)
-	AccessError *TeamFolderAccessError `json:"access_error,omitempty"`
-	// StatusError : has no documentation (yet)
-	StatusError *TeamFolderInvalidStatusError `json:"status_error,omitempty"`
 }
 
 // Valid tag values for TeamFolderActivateError
-const (
-	TeamFolderActivateErrorAccessError = "access_error"
-	TeamFolderActivateErrorStatusError = "status_error"
-	TeamFolderActivateErrorOther       = "other"
-)
-
-// UnmarshalJSON deserializes into a TeamFolderActivateError instance
-func (u *TeamFolderActivateError) UnmarshalJSON(body []byte) error {
-	type wrap struct {
-		dropbox.Tagged
-		// AccessError : has no documentation (yet)
-		AccessError json.RawMessage `json:"access_error,omitempty"`
-		// StatusError : has no documentation (yet)
-		StatusError json.RawMessage `json:"status_error,omitempty"`
-	}
-	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
-		return err
-	}
-	u.Tag = w.Tag
-	switch u.Tag {
-	case "access_error":
-		if err := json.Unmarshal(w.AccessError, &u.AccessError); err != nil {
-			return err
-		}
-
-	case "status_error":
-		if err := json.Unmarshal(w.StatusError, &u.StatusError); err != nil {
-			return err
-		}
-
-	}
-	return nil
-}
+const ()
 
 // TeamFolderIdArg : has no documentation (yet)
 type TeamFolderIdArg struct {
@@ -2458,50 +2677,13 @@ func NewTeamFolderArchiveArg(TeamFolderId string) *TeamFolderArchiveArg {
 	return s
 }
 
-// TeamFolderArchiveError : has no documentation (yet)
+// TeamFolderArchiveError :
 type TeamFolderArchiveError struct {
 	dropbox.Tagged
-	// AccessError : has no documentation (yet)
-	AccessError *TeamFolderAccessError `json:"access_error,omitempty"`
-	// StatusError : has no documentation (yet)
-	StatusError *TeamFolderInvalidStatusError `json:"status_error,omitempty"`
 }
 
 // Valid tag values for TeamFolderArchiveError
-const (
-	TeamFolderArchiveErrorAccessError = "access_error"
-	TeamFolderArchiveErrorStatusError = "status_error"
-	TeamFolderArchiveErrorOther       = "other"
-)
-
-// UnmarshalJSON deserializes into a TeamFolderArchiveError instance
-func (u *TeamFolderArchiveError) UnmarshalJSON(body []byte) error {
-	type wrap struct {
-		dropbox.Tagged
-		// AccessError : has no documentation (yet)
-		AccessError json.RawMessage `json:"access_error,omitempty"`
-		// StatusError : has no documentation (yet)
-		StatusError json.RawMessage `json:"status_error,omitempty"`
-	}
-	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
-		return err
-	}
-	u.Tag = w.Tag
-	switch u.Tag {
-	case "access_error":
-		if err := json.Unmarshal(w.AccessError, &u.AccessError); err != nil {
-			return err
-		}
-
-	case "status_error":
-		if err := json.Unmarshal(w.StatusError, &u.StatusError); err != nil {
-			return err
-		}
-
-	}
-	return nil
-}
+const ()
 
 // TeamFolderArchiveJobStatus : has no documentation (yet)
 type TeamFolderArchiveJobStatus struct {
@@ -2532,21 +2714,24 @@ func (u *TeamFolderArchiveJobStatus) UnmarshalJSON(body []byte) error {
 		Failed json.RawMessage `json:"failed,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "complete":
-		if err := json.Unmarshal(body, &u.Complete); err != nil {
+		err = json.Unmarshal(body, &u.Complete)
+
+		if err != nil {
 			return err
 		}
-
 	case "failed":
-		if err := json.Unmarshal(w.Failed, &u.Failed); err != nil {
+		err = json.Unmarshal(w.Failed, &u.Failed)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -2571,16 +2756,18 @@ func (u *TeamFolderArchiveLaunch) UnmarshalJSON(body []byte) error {
 		Complete json.RawMessage `json:"complete,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "complete":
-		if err := json.Unmarshal(body, &u.Complete); err != nil {
+		err = json.Unmarshal(body, &u.Complete)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -2607,6 +2794,7 @@ type TeamFolderCreateError struct {
 const (
 	TeamFolderCreateErrorInvalidFolderName     = "invalid_folder_name"
 	TeamFolderCreateErrorFolderNameAlreadyUsed = "folder_name_already_used"
+	TeamFolderCreateErrorFolderNameReserved    = "folder_name_reserved"
 	TeamFolderCreateErrorOther                 = "other"
 )
 
@@ -2634,21 +2822,24 @@ func (u *TeamFolderGetInfoItem) UnmarshalJSON(body []byte) error {
 		TeamFolderMetadata json.RawMessage `json:"team_folder_metadata,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "id_not_found":
-		if err := json.Unmarshal(body, &u.IdNotFound); err != nil {
+		err = json.Unmarshal(body, &u.IdNotFound)
+
+		if err != nil {
 			return err
 		}
-
 	case "team_folder_metadata":
-		if err := json.Unmarshal(body, &u.TeamFolderMetadata); err != nil {
+		err = json.Unmarshal(body, &u.TeamFolderMetadata)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -2673,9 +2864,10 @@ type TeamFolderInvalidStatusError struct {
 
 // Valid tag values for TeamFolderInvalidStatusError
 const (
-	TeamFolderInvalidStatusErrorActive   = "active"
-	TeamFolderInvalidStatusErrorArchived = "archived"
-	TeamFolderInvalidStatusErrorOther    = "other"
+	TeamFolderInvalidStatusErrorActive            = "active"
+	TeamFolderInvalidStatusErrorArchived          = "archived"
+	TeamFolderInvalidStatusErrorArchiveInProgress = "archive_in_progress"
+	TeamFolderInvalidStatusErrorOther             = "other"
 )
 
 // TeamFolderListArg : has no documentation (yet)
@@ -2691,6 +2883,30 @@ func NewTeamFolderListArg() *TeamFolderListArg {
 	return s
 }
 
+// TeamFolderListContinueArg : has no documentation (yet)
+type TeamFolderListContinueArg struct {
+	// Cursor : Indicates from what point to get the next set of team folders.
+	Cursor string `json:"cursor"`
+}
+
+// NewTeamFolderListContinueArg returns a new TeamFolderListContinueArg instance
+func NewTeamFolderListContinueArg(Cursor string) *TeamFolderListContinueArg {
+	s := new(TeamFolderListContinueArg)
+	s.Cursor = Cursor
+	return s
+}
+
+// TeamFolderListContinueError : has no documentation (yet)
+type TeamFolderListContinueError struct {
+	dropbox.Tagged
+}
+
+// Valid tag values for TeamFolderListContinueError
+const (
+	TeamFolderListContinueErrorInvalidCursor = "invalid_cursor"
+	TeamFolderListContinueErrorOther         = "other"
+)
+
 // TeamFolderListError : has no documentation (yet)
 type TeamFolderListError struct {
 	// AccessError : has no documentation (yet)
@@ -2704,16 +2920,26 @@ func NewTeamFolderListError(AccessError *TeamFolderAccessError) *TeamFolderListE
 	return s
 }
 
-// TeamFolderListResult : Result for `teamFolderList`.
+// TeamFolderListResult : Result for `teamFolderList` and
+// `teamFolderListContinue`.
 type TeamFolderListResult struct {
 	// TeamFolders : List of all team folders in the authenticated team.
 	TeamFolders []*TeamFolderMetadata `json:"team_folders"`
+	// Cursor : Pass the cursor into `teamFolderListContinue` to obtain
+	// additional team folders.
+	Cursor string `json:"cursor"`
+	// HasMore : Is true if there are additional team folders that have not been
+	// returned yet. An additional call to `teamFolderListContinue` can retrieve
+	// them.
+	HasMore bool `json:"has_more"`
 }
 
 // NewTeamFolderListResult returns a new TeamFolderListResult instance
-func NewTeamFolderListResult(TeamFolders []*TeamFolderMetadata) *TeamFolderListResult {
+func NewTeamFolderListResult(TeamFolders []*TeamFolderMetadata, Cursor string, HasMore bool) *TeamFolderListResult {
 	s := new(TeamFolderListResult)
 	s.TeamFolders = TeamFolders
+	s.Cursor = Cursor
+	s.HasMore = HasMore
 	return s
 }
 
@@ -2736,50 +2962,13 @@ func NewTeamFolderMetadata(TeamFolderId string, Name string, Status *TeamFolderS
 	return s
 }
 
-// TeamFolderPermanentlyDeleteError : has no documentation (yet)
+// TeamFolderPermanentlyDeleteError :
 type TeamFolderPermanentlyDeleteError struct {
 	dropbox.Tagged
-	// AccessError : has no documentation (yet)
-	AccessError *TeamFolderAccessError `json:"access_error,omitempty"`
-	// StatusError : has no documentation (yet)
-	StatusError *TeamFolderInvalidStatusError `json:"status_error,omitempty"`
 }
 
 // Valid tag values for TeamFolderPermanentlyDeleteError
-const (
-	TeamFolderPermanentlyDeleteErrorAccessError = "access_error"
-	TeamFolderPermanentlyDeleteErrorStatusError = "status_error"
-	TeamFolderPermanentlyDeleteErrorOther       = "other"
-)
-
-// UnmarshalJSON deserializes into a TeamFolderPermanentlyDeleteError instance
-func (u *TeamFolderPermanentlyDeleteError) UnmarshalJSON(body []byte) error {
-	type wrap struct {
-		dropbox.Tagged
-		// AccessError : has no documentation (yet)
-		AccessError json.RawMessage `json:"access_error,omitempty"`
-		// StatusError : has no documentation (yet)
-		StatusError json.RawMessage `json:"status_error,omitempty"`
-	}
-	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
-		return err
-	}
-	u.Tag = w.Tag
-	switch u.Tag {
-	case "access_error":
-		if err := json.Unmarshal(w.AccessError, &u.AccessError); err != nil {
-			return err
-		}
-
-	case "status_error":
-		if err := json.Unmarshal(w.StatusError, &u.StatusError); err != nil {
-			return err
-		}
-
-	}
-	return nil
-}
+const ()
 
 // TeamFolderRenameArg : has no documentation (yet)
 type TeamFolderRenameArg struct {
@@ -2799,39 +2988,14 @@ func NewTeamFolderRenameArg(TeamFolderId string, Name string) *TeamFolderRenameA
 // TeamFolderRenameError : has no documentation (yet)
 type TeamFolderRenameError struct {
 	dropbox.Tagged
-	// AccessError : has no documentation (yet)
-	AccessError *TeamFolderAccessError `json:"access_error,omitempty"`
 }
 
 // Valid tag values for TeamFolderRenameError
 const (
-	TeamFolderRenameErrorAccessError           = "access_error"
 	TeamFolderRenameErrorInvalidFolderName     = "invalid_folder_name"
 	TeamFolderRenameErrorFolderNameAlreadyUsed = "folder_name_already_used"
-	TeamFolderRenameErrorOther                 = "other"
+	TeamFolderRenameErrorFolderNameReserved    = "folder_name_reserved"
 )
-
-// UnmarshalJSON deserializes into a TeamFolderRenameError instance
-func (u *TeamFolderRenameError) UnmarshalJSON(body []byte) error {
-	type wrap struct {
-		dropbox.Tagged
-		// AccessError : has no documentation (yet)
-		AccessError json.RawMessage `json:"access_error,omitempty"`
-	}
-	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
-		return err
-	}
-	u.Tag = w.Tag
-	switch u.Tag {
-	case "access_error":
-		if err := json.Unmarshal(w.AccessError, &u.AccessError); err != nil {
-			return err
-		}
-
-	}
-	return nil
-}
 
 // TeamFolderStatus : has no documentation (yet)
 type TeamFolderStatus struct {
@@ -2840,9 +3004,10 @@ type TeamFolderStatus struct {
 
 // Valid tag values for TeamFolderStatus
 const (
-	TeamFolderStatusActive   = "active"
-	TeamFolderStatusArchived = "archived"
-	TeamFolderStatusOther    = "other"
+	TeamFolderStatusActive            = "active"
+	TeamFolderStatusArchived          = "archived"
+	TeamFolderStatusArchiveInProgress = "archive_in_progress"
+	TeamFolderStatusOther             = "other"
 )
 
 // TeamGetInfoResult : has no documentation (yet)
@@ -2932,16 +3097,18 @@ func (u *TeamMemberStatus) UnmarshalJSON(body []byte) error {
 		Removed json.RawMessage `json:"removed,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "removed":
-		if err := json.Unmarshal(body, &u.Removed); err != nil {
+		err = json.Unmarshal(body, &u.Removed)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -2956,6 +3123,32 @@ const (
 	TeamMembershipTypeFull    = "full"
 	TeamMembershipTypeLimited = "limited"
 )
+
+// TokenGetAuthenticatedAdminError : Error returned by
+// `tokenGetAuthenticatedAdmin`.
+type TokenGetAuthenticatedAdminError struct {
+	dropbox.Tagged
+}
+
+// Valid tag values for TokenGetAuthenticatedAdminError
+const (
+	TokenGetAuthenticatedAdminErrorMappingNotFound = "mapping_not_found"
+	TokenGetAuthenticatedAdminErrorAdminNotActive  = "admin_not_active"
+	TokenGetAuthenticatedAdminErrorOther           = "other"
+)
+
+// TokenGetAuthenticatedAdminResult : Results for `tokenGetAuthenticatedAdmin`.
+type TokenGetAuthenticatedAdminResult struct {
+	// AdminProfile : The admin who authorized the token.
+	AdminProfile *TeamMemberProfile `json:"admin_profile"`
+}
+
+// NewTokenGetAuthenticatedAdminResult returns a new TokenGetAuthenticatedAdminResult instance
+func NewTokenGetAuthenticatedAdminResult(AdminProfile *TeamMemberProfile) *TokenGetAuthenticatedAdminResult {
+	s := new(TokenGetAuthenticatedAdminResult)
+	s.AdminProfile = AdminProfile
+	return s
+}
 
 // UpdatePropertyTemplateArg : has no documentation (yet)
 type UpdatePropertyTemplateArg struct {
@@ -2994,6 +3187,42 @@ func NewUpdatePropertyTemplateResult(TemplateId string) *UpdatePropertyTemplateR
 	return s
 }
 
+// UploadApiRateLimitValue : The value for `Feature.upload_api_rate_limit`.
+type UploadApiRateLimitValue struct {
+	dropbox.Tagged
+	// Limit : The number of upload API calls allowed per month.
+	Limit uint32 `json:"limit,omitempty"`
+}
+
+// Valid tag values for UploadApiRateLimitValue
+const (
+	UploadApiRateLimitValueUnlimited = "unlimited"
+	UploadApiRateLimitValueLimit     = "limit"
+	UploadApiRateLimitValueOther     = "other"
+)
+
+// UnmarshalJSON deserializes into a UploadApiRateLimitValue instance
+func (u *UploadApiRateLimitValue) UnmarshalJSON(body []byte) error {
+	type wrap struct {
+		dropbox.Tagged
+	}
+	var w wrap
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
+		return err
+	}
+	u.Tag = w.Tag
+	switch u.Tag {
+	case "limit":
+		err = json.Unmarshal(body, &u.Limit)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UserSelectorArg : Argument for selecting a single user, either by
 // team_member_id, external_id or email.
 type UserSelectorArg struct {
@@ -3019,26 +3248,30 @@ func (u *UserSelectorArg) UnmarshalJSON(body []byte) error {
 		dropbox.Tagged
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "team_member_id":
-		if err := json.Unmarshal(body, &u.TeamMemberId); err != nil {
+		err = json.Unmarshal(body, &u.TeamMemberId)
+
+		if err != nil {
 			return err
 		}
-
 	case "external_id":
-		if err := json.Unmarshal(body, &u.ExternalId); err != nil {
+		err = json.Unmarshal(body, &u.ExternalId)
+
+		if err != nil {
 			return err
 		}
-
 	case "email":
-		if err := json.Unmarshal(body, &u.Email); err != nil {
+		err = json.Unmarshal(body, &u.Email)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -3074,26 +3307,30 @@ func (u *UsersSelectorArg) UnmarshalJSON(body []byte) error {
 		Emails json.RawMessage `json:"emails,omitempty"`
 	}
 	var w wrap
-	if err := json.Unmarshal(body, &w); err != nil {
+	var err error
+	if err = json.Unmarshal(body, &w); err != nil {
 		return err
 	}
 	u.Tag = w.Tag
 	switch u.Tag {
 	case "team_member_ids":
-		if err := json.Unmarshal(body, &u.TeamMemberIds); err != nil {
+		err = json.Unmarshal(body, &u.TeamMemberIds)
+
+		if err != nil {
 			return err
 		}
-
 	case "external_ids":
-		if err := json.Unmarshal(body, &u.ExternalIds); err != nil {
+		err = json.Unmarshal(body, &u.ExternalIds)
+
+		if err != nil {
 			return err
 		}
-
 	case "emails":
-		if err := json.Unmarshal(body, &u.Emails); err != nil {
+		err = json.Unmarshal(body, &u.Emails)
+
+		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
