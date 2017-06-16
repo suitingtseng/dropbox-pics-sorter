@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"time"
@@ -32,7 +33,7 @@ func main() {
 
 	res, err := dbx.Ls(CAMERA_UPLOADS)
 	if err != nil {
-		os.Exit(2)
+		log.Fatalf("Erorr from dbx.Ls: %s\n", err.Error())
 	}
 
 	chan_time := make(chan time.Time)
