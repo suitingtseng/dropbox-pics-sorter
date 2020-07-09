@@ -30,7 +30,10 @@ type LsResult struct {
 }
 
 func NewDropbox(token string, verbose bool) *Dbx {
-	config := dropbox.Config{Token: token, Verbose: verbose}
+	config := dropbox.Config{Token: token}
+	if verbose {
+		config.LogLevel = dropbox.LogInfo
+	}
 	dbx_files := files.New(config)
 	return &Dbx{
 		client: dbx_files,
@@ -42,7 +45,7 @@ func (dbx *Dbx) Mkdir(path string) error {
 		Path:       path,
 		Autorename: false,
 	}
-	_, err := dbx.client.CreateFolder(arg)
+	_, err := dbx.client.CreateFolderV2(arg)
 	return err
 }
 
@@ -59,37 +62,43 @@ func (dbx *Dbx) Ls(path string) ([]LsResult, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	ls_results := make([]LsResult, 0)
-	for _, entry := range (*res).Entries {
-		meta, ok := entry.(*files.FileMetadata)
-		if !ok {
-			continue
+
+	for {
+		for _, entry := range (*res).Entries {
+			meta, ok := entry.(*files.FileMetadata)
+			if !ok {
+				continue
+			}
+			ls_results = append(ls_results, LsResult{
+				path:         meta.PathLower,
+				lastModified: meta.ClientModified,
+			})
 		}
-		ls_results = append(ls_results, LsResult{
-			path:         meta.PathLower,
-			lastModified: meta.ClientModified,
-		})
+		if len(ls_results) > 200 {
+			break
+		}
+		if res.HasMore {
+			longpoll_arg := files.NewListFolderContinueArg(res.Cursor)
+			res, err = dbx.client.ListFolderContinue(longpoll_arg)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
+
 	return ls_results, nil
 }
 
 // only try to launch a batch move file;
 // does not check the job status.
 func (dbx *Dbx) MvBatch(mv_args []MvArg) error {
-	dbx_mv_arg := &files.RelocationBatchArg{
-		Entries:           [](*files.RelocationPath){},
-		AllowSharedFolder: false,
-		Autorename:        false,
-	}
+	reloc_paths := [](*files.RelocationPath){}
 	for _, arg := range mv_args {
-		entry := &files.RelocationPath{
-			FromPath: arg.src,
-			ToPath:   arg.dest,
-		}
-		dbx_mv_arg.Entries = append(dbx_mv_arg.Entries, entry)
+		reloc_paths = append(reloc_paths, files.NewRelocationPath(arg.src, arg.dest))
 	}
-	_, err := dbx.client.MoveBatch(dbx_mv_arg)
+	dbx_mv_arg := files.NewMoveBatchArg(reloc_paths)
+	_, err := dbx.client.MoveBatchV2(dbx_mv_arg)
 	return err
 }
 
