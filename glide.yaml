@@ -1,7 +1,0 @@
-package: dropbox-pics-sorter
-import:
-- package: github.com/dropbox/dropbox-sdk-go-unofficial
-  version: master
-  subpackages:
-  - dropbox
-  - dropbox/files
