@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
+	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/async"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
 )
 
@@ -92,14 +93,17 @@ func (dbx *Dbx) Ls(path string, limit int) ([]LsResult, error) {
 
 // only try to launch a batch move file;
 // does not check the job status.
-func (dbx *Dbx) MvBatch(mv_args []MvArg) error {
+func (dbx *Dbx) MvBatch(mv_args []MvArg) (string, error) {
 	reloc_paths := [](*files.RelocationPath){}
 	for _, arg := range mv_args {
 		reloc_paths = append(reloc_paths, files.NewRelocationPath(arg.src, arg.dest))
 	}
 	dbx_mv_arg := files.NewMoveBatchArg(reloc_paths)
-	_, err := dbx.client.MoveBatchV2(dbx_mv_arg)
-	return err
+	res, err := dbx.client.MoveBatchV2(dbx_mv_arg)
+	if err != nil {
+		return "", err
+	}
+	return res.AsyncJobId, err
 }
 
 func Mkdir(dbx *Dbx, c chan MkdirArg, finish chan int) {
@@ -122,4 +126,12 @@ func Mkdir(dbx *Dbx, c chan MkdirArg, finish chan int) {
 		}
 	}
 	finish <- created
+}
+
+func (dbx *Dbx) CheckAsyncJobStatus(jobId string) bool {
+	res, err := dbx.client.MoveBatchCheckV2(async.NewPollArg(jobId))
+	if err != nil {
+		return false
+	}
+	return res.Tag == files.RelocationBatchV2JobStatusComplete
 }

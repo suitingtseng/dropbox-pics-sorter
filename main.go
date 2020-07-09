@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"time"
 )
 
 const (
@@ -18,12 +19,14 @@ var (
 	token   string
 	limit   int
 	verbose bool
+	sync    bool
 )
 
 func init() {
 	flag.StringVar(&token, "token", "", "Dropbox API token, required")
 	flag.IntVar(&limit, "limit", 100, "How many files to create folders for and move in a single execution, default: 100")
 	flag.BoolVar(&verbose, "verbose", false, "Verbose, optional, default: false")
+	flag.BoolVar(&sync, "sync", false, "Check async job status and exit on complete, default: false")
 	flag.Parse()
 	if len(token) == 0 {
 		flag.Usage()
@@ -72,10 +75,20 @@ func main() {
 	close(chan_mkdirarg)
 	created_folders := <-chan_finish
 	fmt.Printf("Created %d folders...\n", created_folders)
-
-	err = dbx.MvBatch(mv_args)
+	if len(mv_args) == 0 {
+		fmt.Println("No files to move.")
+		return
+	}
+	job_id, err := dbx.MvBatch(mv_args)
 	if err != nil {
 		fmt.Printf("MvBatch error: %s\n", err.Error())
 	}
 	fmt.Printf("Moved %d files...\n", len(mv_args))
+	if sync {
+		for !dbx.CheckAsyncJobStatus(job_id) {
+			fmt.Printf("[%s] Checking job status, job id: %s\n", time.Now().Format("2006-01-02 15:04:05.000"), job_id)
+			time.Sleep(10 * time.Second)
+		}
+		fmt.Printf("[%s] Async job done\n", time.Now().Format("2006-01-02 15:04:05.000"))
+	}
 }
