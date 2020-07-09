@@ -16,11 +16,13 @@ const (
 
 var (
 	token   string
+	limit   int
 	verbose bool
 )
 
 func init() {
 	flag.StringVar(&token, "token", "", "Dropbox API token, required")
+	flag.IntVar(&limit, "limit", 100, "How many files to create folders for and move in a single execution, default: 100")
 	flag.BoolVar(&verbose, "verbose", false, "Verbose, optional, default: false")
 	flag.Parse()
 	if len(token) == 0 {
@@ -32,7 +34,7 @@ func init() {
 func main() {
 	dbx := NewDropbox(token, verbose)
 
-	res, err := dbx.Ls(CAMERA_UPLOADS)
+	res, err := dbx.Ls(CAMERA_UPLOADS, limit)
 	if err != nil {
 		log.Fatalf("Erorr from dbx.Ls: %s\n", err.Error())
 	}

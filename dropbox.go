@@ -49,7 +49,7 @@ func (dbx *Dbx) Mkdir(path string) error {
 	return err
 }
 
-func (dbx *Dbx) Ls(path string) ([]LsResult, error) {
+func (dbx *Dbx) Ls(path string, limit int) ([]LsResult, error) {
 	arg := &files.ListFolderArg{
 		Path:                            path,
 		Recursive:                       false,
@@ -62,7 +62,7 @@ func (dbx *Dbx) Ls(path string) ([]LsResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	ls_results := make([]LsResult, 0)
+	ls_results := make([]LsResult, 0, limit)
 
 	for {
 		for _, entry := range (*res).Entries {
@@ -75,7 +75,7 @@ func (dbx *Dbx) Ls(path string) ([]LsResult, error) {
 				lastModified: meta.ClientModified,
 			})
 		}
-		if len(ls_results) > 200 {
+		if len(ls_results) >= limit {
 			break
 		}
 		if res.HasMore {
@@ -87,7 +87,7 @@ func (dbx *Dbx) Ls(path string) ([]LsResult, error) {
 		}
 	}
 
-	return ls_results, nil
+	return ls_results[:limit], nil
 }
 
 // only try to launch a batch move file;
