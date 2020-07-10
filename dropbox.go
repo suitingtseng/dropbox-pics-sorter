@@ -57,6 +57,7 @@ func (dbx *Dbx) Ls(path string, limit int) ([]LsResult, error) {
 		IncludeMediaInfo:                true,
 		IncludeDeleted:                  false,
 		IncludeHasExplicitSharedMembers: false,
+		Limit:                           100,
 	}
 
 	res, err := dbx.client.ListFolder(arg)
