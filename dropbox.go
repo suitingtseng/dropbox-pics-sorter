@@ -85,6 +85,8 @@ func (dbx *Dbx) Ls(path string, limit int) ([]LsResult, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			break
 		}
 	}
 
