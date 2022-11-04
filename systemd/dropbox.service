@@ -4,7 +4,7 @@ Wants=dropbox.timer
 
 [Service]
 Type=oneshot
-ExecStart=<path>/dropbox-pics-sorter -sync -token <token>
+ExecStart=<path>/dropbox-pics-sorter -sync -token <token> -limit 100
 
 [Install]
 WantedBy=multi-user.targe
