@@ -21,4 +21,12 @@ dropbox-pics-sorter
   dropbox-pics-sorter -token <your-dropbox-api-token>
 ```
 
+### systemd related
+
+```
+$ sudo systemctl daemon-reload
+$ sudo systemctl start dropbox.timer
+$ journalctl -S today -f -u dropbox.service
+```
+
 Profit!
