@@ -1,0 +1,10 @@
+[Unit]
+Description=Sort dropbox camera uploads
+Wants=dropbox.timer
+
+[Service]
+Type=oneshot
+ExecStart=<path>/dropbox-pics-sorter -sync -token <token>
+
+[Install]
+WantedBy=multi-user.targe
