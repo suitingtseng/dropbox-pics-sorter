@@ -1,0 +1,10 @@
+[Unit]
+Description=fires dropbox.service every minutes
+Requires=dropbox.service
+
+[Timer]
+Unit=dropbox.service
+OnCalendar=*-*-* *:*:00
+
+[Install]
+WantedBy=timers.target
